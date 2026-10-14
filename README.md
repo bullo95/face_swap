@@ -86,6 +86,9 @@ et les threads ONNX Runtime ne tournent pas en attente active. Journal : `~/Libr
 
 Produit `dist/FaceCam.app` (modèles inclus, macOS 15 minimum à cause des modèles CoreML palettisés).
 L'app contient `NSCameraUsageDescription`, nécessaire pour que macOS affiche la demande d'autorisation caméra.
+La signature est ad hoc : son empreinte change à chaque build et macOS refuse alors la caméra sans rien demander.
+Le script lance `tccutil reset Camera fr.bruno.facecam` après la signature pour que l'autorisation soit redemandée.
+Pour une autorisation durable, signer avec un certificat stable (Developer ID ou certificat auto-signé).
 
 ## Structure
 
