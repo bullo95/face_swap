@@ -4,6 +4,7 @@ set -e
 cd "$(dirname "$0")/.."
 rm -rf build dist
 export PYINSTALLER_CONFIG_DIR="$PWD/build/pyinstaller-cache"
+.venv/bin/python scripts/compile_coreml_models.py
 .venv/bin/pyinstaller --noconfirm facecam.spec
 codesign --force --deep --sign - dist/FaceCam.app
 echo "OK : dist/FaceCam.app"

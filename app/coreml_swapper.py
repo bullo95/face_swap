@@ -26,19 +26,56 @@ class _Input:
         self.name = name
 
 
+def compiled_model_path(mlpackage_path: str) -> str:
+    """Compile le .mlpackage une seule fois vers ~/Library/Application Support/FaceCam/compiled/<nom>.mlmodelc.
+    On ne charge jamais le paquet source depuis le bundle (signé, parfois en lecture seule, volume externe) :
+    coremltools tente d'y écrire et peut bloquer. Le modèle compilé démarre aussi plus vite."""
+    import shutil
+    import coremltools as ct
+
+    name = os.path.splitext(os.path.basename(mlpackage_path))[0]
+    shipped = os.path.join(os.path.dirname(mlpackage_path), "compiled", name + ".mlmodelc")
+    if os.path.isdir(shipped):  # précompilé à la construction de l'app : aucun accès au .mlpackage à l'exécution
+        return shipped
+    if not os.path.isdir(mlpackage_path):
+        raise FileNotFoundError(mlpackage_path)
+    base = os.path.expanduser("~/Library/Application Support/FaceCam/compiled")
+    os.makedirs(base, exist_ok=True)
+    dst = os.path.join(base, name + ".mlmodelc")
+    stamp = os.path.join(dst, ".source_stamp")
+    # empreinte simple : taille + mtime du fichier de poids
+    weights = os.path.join(mlpackage_path, "Data", "com.apple.CoreML", "weights", "weight.bin")
+    st = os.stat(weights) if os.path.exists(weights) else os.stat(mlpackage_path)
+    sig = f"{st.st_size}:{int(st.st_mtime)}"
+    if os.path.isdir(dst) and os.path.exists(stamp) and open(stamp).read().strip() == sig:
+        return dst
+    log.info("compilation CoreML de %s…", name)
+    tmp = ct.utils.compile_model(mlpackage_path)  # .mlmodelc dans un dossier temporaire
+    if os.path.isdir(dst):
+        shutil.rmtree(dst)
+    shutil.copytree(tmp, dst)
+    with open(stamp, "w") as f:
+        f.write(sig)
+    return dst
+
+
 class CoreMLSwapperSession:
     def __init__(self, mlpackage_path: str, compute_units: str = "CPUAndNeuralEngine"):
         import coremltools as ct
 
-        if not os.path.isdir(mlpackage_path):
-            raise FileNotFoundError(mlpackage_path)
         cu = getattr(ct.ComputeUnit, COMPUTE_UNIT_MAP.get(compute_units, "CPU_AND_NE"))
-        self.model = ct.models.MLModel(mlpackage_path, compute_units=cu)
-        spec = self.model.get_spec()
-        self._in_names = [i.name for i in spec.description.input]
-        self._out_name = spec.description.output[0].name
+        compiled = compiled_model_path(mlpackage_path)  # accepte un .mlmodelc précompilé sans le .mlpackage
+        self.model = ct.models.CompiledMLModel(compiled, compute_units=cu)
+        # noms d'entrées/sortie : depuis la description du modèle compilé
+        desc = self.model._MLModelProxy.get_spec().description if hasattr(self.model, "_MLModelProxy") and hasattr(self.model._MLModelProxy, "get_spec") else None
+        if desc is None:
+            self._in_names = ["target", "source"]
+            self._out_name = "output"
+        else:
+            self._in_names = [i.name for i in desc.input]
+            self._out_name = desc.output[0].name
         self.compute_units = compute_units
-        log.info("swapper CoreML natif : %s (%s)", os.path.basename(mlpackage_path), cu)
+        log.info("swapper CoreML natif : %s (%s, compilé)", os.path.basename(mlpackage_path), cu)
 
     def get_inputs(self):
         return [_Input(n) for n in self._in_names]

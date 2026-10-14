@@ -29,6 +29,8 @@ Le menu **Modèle de swap** choisit entre *Qualité* (poids int8, 48 ms, écart 
 Pourquoi ça marche : le réseau pèse 349 GFLOP mais surtout ~250 Mo de poids par inférence ; sur le Neural Engine il est
 limité par la bande passante mémoire, et les poids int8 la divisent par deux (120 ms fp16 natif → 48 ms, écart moyen 0,003).
 Le moteur utilise ce modèle s'il est présent, sinon ONNX Runtime (`FACECAM_NO_COREML=1` pour forcer le repli).
+`scripts/build_app.sh` précompile les paquets en `.mlmodelc` (`models/compiled/`) : l'app n'embarque que ces versions
+compilées, chargées en 2 à 3 s, car charger un `.mlpackage` depuis le bundle prenait plus d'une minute.
 
 ## Modes
 

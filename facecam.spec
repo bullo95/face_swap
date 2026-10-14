@@ -13,9 +13,11 @@ for f in glob.glob("models/*.onnx"):
 if os.path.exists("models/inswapper_emap.npy"):
     datas.append(("models/inswapper_emap.npy", "models"))
 # modèle CoreML natif int8 (dossier .mlpackage) : copié tel quel dans models/
-for pkg in ("models/inswapper_128_int8.mlpackage", "models/inswapper_128_p6.mlpackage"):
-    if os.path.isdir(pkg):
-        datas.append((pkg, pkg))
+# Modèles CoreML natifs : uniquement les versions précompilées (.mlmodelc), chargées directement ;
+# les .mlpackage ne sont pas embarqués (coremltools tente d'y écrire et peut bloquer dans un bundle).
+for c in ("models/compiled/inswapper_128_int8.mlmodelc", "models/compiled/inswapper_128_p6.mlmodelc"):
+    if os.path.isdir(c):
+        datas.append((c, c))
 for f in glob.glob("models/insightface/models/buffalo_l/*.onnx"):
     datas.append((f, "models/insightface/models/buffalo_l"))
 datas += collect_data_files("insightface")

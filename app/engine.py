@@ -173,7 +173,8 @@ class FaceEngine:
         candidates = [INSWAPPER_COREML_FAST_PATH, INSWAPPER_COREML_PATH] if quality == "fast" else [INSWAPPER_COREML_PATH, INSWAPPER_COREML_FAST_PATH]
         if not os.environ.get("FACECAM_NO_COREML"):
             for path in candidates:
-                if not os.path.isdir(path):
+                compiled = os.path.join(os.path.dirname(path), "compiled", os.path.splitext(os.path.basename(path))[0] + ".mlmodelc")
+                if not os.path.isdir(path) and not os.path.isdir(compiled):
                     continue
                 try:
                     from .coreml_swapper import CoreMLSwapper
