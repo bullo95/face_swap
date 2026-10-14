@@ -31,7 +31,7 @@ a = Analysis(
     hiddenimports=hidden,
     hookspath=[],
     excludes=["tkinter", "matplotlib", "PySide6.QtWebEngineCore", "PySide6.QtQml", "PySide6.Qt3DCore",
-              "torch", "torchvision", "torchaudio", "onnx2torch", "sklearn", "coremltools.converters", "coremltools.optimize"],
+              "torch", "torchvision", "torchaudio", "onnx2torch", "sklearn"],  # coremltools importe converters/optimize : ne pas les exclure
     noarchive=False,
 )
 pyz = PYZ(a.pure)
