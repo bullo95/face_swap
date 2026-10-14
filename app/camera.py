@@ -70,9 +70,16 @@ def list_cameras(max_index: int = 6) -> List[Tuple[str, str]]:
 
 
 def opencv_index_for(unique_id: str) -> int:
-    """Index OpenCV (AVFoundation) correspondant à l'identifiant unique, calculé au moment de l'ouverture."""
-    devs = _avfoundation_devices()
-    for i, (uid, _) in enumerate(devs):
+    """Index OpenCV correspondant à l'identifiant unique, calculé au moment de l'ouverture.
+    OpenCV (cap_avfoundation_mac.mm) prend devicesWithMediaType(Video) + (Muxed) puis TRIE par uniqueID
+    (NSString compare) avant de numéroter : on reproduit ce tri."""
+    try:
+        import AVFoundation
+        devs = [str(d.uniqueID()) for d in AVFoundation.AVCaptureDevice.devicesWithMediaType_(AVFoundation.AVMediaTypeVideo)]
+        devs += [str(d.uniqueID()) for d in AVFoundation.AVCaptureDevice.devicesWithMediaType_(AVFoundation.AVMediaTypeMuxed)]
+    except Exception:  # noqa: BLE001
+        devs = [uid for uid, _ in _avfoundation_devices()]
+    for i, uid in enumerate(sorted(devs)):
         if uid == unique_id:
             return i
     if unique_id.isdigit():
