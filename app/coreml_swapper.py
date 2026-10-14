@@ -61,12 +61,16 @@ class CoreMLSwapper:
     """Adaptateur minimal reproduisant les attributs de insightface INSwapper utilisés par le moteur."""
 
     def __init__(self, mlpackage_path: str, onnx_path: str, compute_units: str = "CPUAndNeuralEngine"):
-        import onnx
-        from onnx import numpy_helper
-
         self.session = CoreMLSwapperSession(mlpackage_path, compute_units)
-        graph = onnx.load(onnx_path, load_external_data=False).graph
-        self.emap = numpy_helper.to_array(graph.initializer[-1])  # projection du vecteur d'identité
+        # projection du vecteur d'identité (emap) : fichier .npy à côté du modèle, sinon lue dans l'ONNX
+        npy = os.path.join(os.path.dirname(mlpackage_path), "inswapper_emap.npy")
+        if os.path.exists(npy):
+            self.emap = np.load(npy).astype(np.float32)
+        else:
+            import onnx
+            from onnx import numpy_helper
+            graph = onnx.load(onnx_path, load_external_data=False).graph
+            self.emap = numpy_helper.to_array(graph.initializer[-1]).astype(np.float32)
         self.input_mean = 0.0
         self.input_std = 255.0
         self.input_size = (128, 128)

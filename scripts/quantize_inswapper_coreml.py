@@ -63,6 +63,7 @@ for label, mk in variants.items():
         print(f"{label}: échec {repr(e)[:160]}")
 # le modèle int8 est la version retenue
 import shutil
+np.save("models/inswapper_emap.npy", eng.swapper.emap.astype(np.float32)); print("écrit : models/inswapper_emap.npy")
 for key, target in (("int8 par canal", dst), ("palette6 groupe32", dst_fast)):
     if key in results:
         if os.path.exists(target): shutil.rmtree(target)

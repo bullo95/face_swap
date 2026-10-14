@@ -7,7 +7,11 @@ root = os.path.abspath(".")
 datas = []
 # Modèles (≈1,4 Go) copiés dans Contents/MacOS/models (voir app/paths.py : dossier de l'exécutable).
 for f in glob.glob("models/*.onnx"):
+    if f.endswith("inswapper_128.onnx") and os.path.isdir("models/inswapper_128_int8.mlpackage"):
+        continue  # fp32 (530 Mo) inutile quand le modèle CoreML natif est présent (emap dans inswapper_emap.npy)
     datas.append((f, "models"))
+if os.path.exists("models/inswapper_emap.npy"):
+    datas.append(("models/inswapper_emap.npy", "models"))
 # modèle CoreML natif int8 (dossier .mlpackage) : copié tel quel dans models/
 for pkg in ("models/inswapper_128_int8.mlpackage", "models/inswapper_128_p6.mlpackage"):
     if os.path.isdir(pkg):
@@ -26,7 +30,8 @@ a = Analysis(
     datas=datas,
     hiddenimports=hidden,
     hookspath=[],
-    excludes=["tkinter", "matplotlib", "PySide6.QtWebEngineCore", "PySide6.QtQml", "PySide6.Qt3DCore"],
+    excludes=["tkinter", "matplotlib", "PySide6.QtWebEngineCore", "PySide6.QtQml", "PySide6.Qt3DCore",
+              "torch", "torchvision", "torchaudio", "onnx2torch", "sklearn", "coremltools.converters", "coremltools.optimize"],
     noarchive=False,
 )
 pyz = PYZ(a.pure)
