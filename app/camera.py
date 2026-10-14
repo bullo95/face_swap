@@ -20,6 +20,15 @@ def set_thread_qos_interactive():
         pass
 
 
+def camera_access_denied() -> bool:
+    """True si macOS a explicitement refusé (ou restreint) l'accès caméra à cette app."""
+    try:
+        import AVFoundation
+        return AVFoundation.AVCaptureDevice.authorizationStatusForMediaType_(AVFoundation.AVMediaTypeVideo) in (1, 2)
+    except ImportError:
+        return False
+
+
 def request_camera_access(timeout: float = 60.0) -> bool:
     """Demande l'autorisation caméra à macOS (TCC) et attend la réponse. True si accordée."""
     try:

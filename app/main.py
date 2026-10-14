@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider, QStatusBar, QVBoxLayout, QWidget,
 )
 
-from .camera import Camera, list_cameras, request_camera_access, set_thread_qos_interactive
+from .camera import Camera, camera_access_denied, list_cameras, request_camera_access, set_thread_qos_interactive
 from .engine import COMPUTE_UNITS, DEFAULT_COMPUTE_UNITS, DEFAULT_SWAP_QUALITY, MODES, SWAP_QUALITIES, FaceEngine, Settings
 from .vcam import VirtualCamera
 
@@ -329,7 +329,15 @@ class MainWindow(QMainWindow):
         self.cam_combo.clear()
         self.status.showMessage("Demande d'accès à la caméra…")
         QApplication.processEvents()
-        granted = request_camera_access()
+        # La demande macOS peut afficher une boîte de dialogue : on garde l'interface réactive en attendant.
+        granted = request_camera_access(timeout=0.5)
+        if not granted:
+            t0 = time.perf_counter()
+            while time.perf_counter() - t0 < 90:
+                QApplication.processEvents()
+                granted = request_camera_access(timeout=0.5)
+                if granted or camera_access_denied():
+                    break
         log.info("Accès caméra accordé : %s", granted)
         cams = list_cameras() if granted else []
         log.info("Caméras : %s", cams)
@@ -479,6 +487,9 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.stop_camera()
+        if self.loader.isRunning():  # fermer pendant le chargement des modèles : attendre, sinon Qt abandonne le processus
+            self.status.showMessage("Fermeture : attente de la fin du chargement…")
+            self.loader.wait(15000)
         super().closeEvent(event)
 
 
