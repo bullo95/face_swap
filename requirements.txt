@@ -1,0 +1,8 @@
+numpy<2
+opencv-python
+onnxruntime
+insightface
+pyvirtualcam
+PySide6
+Pillow
+pyobjc-framework-AVFoundation

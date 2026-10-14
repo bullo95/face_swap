@@ -1,0 +1,9 @@
+.venv/
+models/
+__pycache__/
+*.pyc
+build/
+dist/
+*.mlpackage
+*.mlmodelc
+.DS_Store
