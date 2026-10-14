@@ -49,23 +49,23 @@ def session_options() -> ort.SessionOptions:
 COMPUTE_UNITS = {  # libellé UI -> option CoreML
     # Mesuré dans l'app, caméra ouverte : Neural Engine seul = 89 ms stable ; Auto (ANE+GPU) = 63-238 ms,
     # car la part GPU subit la concurrence de la capture et de l'affichage. À vide, Auto est plus rapide (48 ms).
-    "Neural Engine seul (recommandé)": "CPUAndNeuralEngine",
-    "Auto (Neural Engine + GPU)": "ALL",
+    "Neural Engine": "CPUAndNeuralEngine",
+    "Auto (NE + GPU)": "ALL",
     "GPU seul": "CPUAndGPU",
 }
 DEFAULT_COMPUTE_UNITS = "CPUAndNeuralEngine"
 
 SWAP_QUALITIES = {  # libellé UI -> clé
-    "Qualité (int8, 48 ms)": "quality",
-    "Rapide (palette 6 bits, 39 ms)": "fast",
+    "Qualité (int8)": "quality",
+    "Rapide (6 bits)": "fast",
 }
 DEFAULT_SWAP_QUALITY = "quality"
 
 MODES = {  # libellé UI -> clé
-    "Remplacer le visage (swap)": "swap",
-    "Flouter le visage": "blur",
-    "Pixelliser le visage": "pixelate",
-    "Masquer le visage (noir)": "mask",
+    "Remplacer (swap)": "swap",
+    "Flouter": "blur",
+    "Pixelliser": "pixelate",
+    "Masquer (noir)": "mask",
 }
 
 

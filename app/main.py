@@ -15,8 +15,8 @@ import numpy as np
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QPushButton, QSlider, QStatusBar, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QComboBox, QFileDialog, QGridLayout, QGroupBox, QHBoxLayout, QLabel,
+    QMainWindow, QMessageBox, QPushButton, QScrollArea, QSlider, QStatusBar, QVBoxLayout, QWidget,
 )
 
 from .camera import Camera, list_cameras, request_camera_access, set_thread_qos_interactive
@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FaceCam — face swap temps réel")
-        self.resize(1180, 720)
+        self.resize(1200, 720)
         self.engine = FaceEngine(Settings(compute_units=self._default_compute_units(), swap_quality=self._default_swap_quality()))
         self.camera: Optional[Camera] = None
         self.vcam = VirtualCamera()
@@ -168,105 +168,101 @@ class MainWindow(QMainWindow):
         self.preview.setMinimumSize(640, 360)
         self.preview.setStyleSheet("background:#111;color:#aaa;font-size:16px;")
 
-        # --- panneau de contrôle
+        # --- panneau de contrôle (compact : libellé + contrôle sur une ligne)
         panel = QVBoxLayout()
+        panel.setSpacing(6)
 
         g_src = QGroupBox("Visage source")
-        l_src = QVBoxLayout(g_src)
-        self.src_thumb = QLabel("Aucune image")
+        l_src = QHBoxLayout(g_src)
+        self.src_thumb = QLabel("Aucune\nimage")
         self.src_thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.src_thumb.setFixedSize(220, 220)
+        self.src_thumb.setFixedSize(96, 96)
         self.src_thumb.setStyleSheet("background:#222;color:#888;border-radius:6px;")
         self.btn_src = QPushButton("Choisir une photo…")
         self.btn_src.clicked.connect(self.pick_source)
         self.btn_src_clear = QPushButton("Retirer")
         self.btn_src_clear.clicked.connect(self.clear_source)
-        l_src.addWidget(self.src_thumb, alignment=Qt.AlignmentFlag.AlignCenter)
-        l_src.addWidget(self.btn_src)
-        l_src.addWidget(self.btn_src_clear)
+        col = QVBoxLayout(); col.addWidget(self.btn_src); col.addWidget(self.btn_src_clear); col.addStretch(1)
+        l_src.addWidget(self.src_thumb); l_src.addLayout(col)
 
         g_cam = QGroupBox("Caméra")
-        l_cam = QVBoxLayout(g_cam)
+        l_cam = QGridLayout(g_cam)
         self.cam_combo = QComboBox()
-        self.btn_cam = QPushButton("Démarrer")
-        self.btn_cam.clicked.connect(self.toggle_camera)
         self.res_combo = QComboBox()
-        for label, w, h in (("1920x1080", 1920, 1080), ("1280x720 (défaut)", 1280, 720), ("960x540", 960, 540), ("640x480", 640, 480)):
+        for label, w, h in (("1920x1080", 1920, 1080), ("1280x720", 1280, 720), ("960x540", 960, 540), ("640x480", 640, 480)):
             self.res_combo.addItem(label, (w, h))
         self.res_combo.setCurrentIndex(1)
-        self.res_combo.setToolTip("Résolution de capture : plus petite = plus d'images par seconde")
-        self.btn_refresh = QPushButton("Rafraîchir la liste")
+        self.res_combo.setToolTip("Résolution de capture")
+        self.btn_refresh = QPushButton("Rafraîchir")
         self.btn_refresh.clicked.connect(self.refresh_cameras)
-        l_cam.addWidget(self.cam_combo)
-        l_cam.addWidget(QLabel("Résolution"))
-        l_cam.addWidget(self.res_combo)
-        l_cam.addWidget(self.btn_refresh)
-        l_cam.addWidget(self.btn_cam)
+        self.btn_cam = QPushButton("Démarrer")
+        self.btn_cam.clicked.connect(self.toggle_camera)
+        self.btn_vcam = QPushButton("Caméra virtuelle")
+        self.btn_vcam.setCheckable(True)
+        self.btn_vcam.clicked.connect(self.toggle_vcam)
+        self.btn_vcam.setEnabled(False)
+        l_cam.addWidget(self.cam_combo, 0, 0, 1, 2)
+        l_cam.addWidget(QLabel("Résolution"), 1, 0); l_cam.addWidget(self.res_combo, 1, 1)
+        l_cam.addWidget(self.btn_refresh, 2, 0); l_cam.addWidget(self.btn_cam, 2, 1)
+        l_cam.addWidget(self.btn_vcam, 3, 0, 1, 2)
 
-        g_opt = QGroupBox("Options")
-        l_opt = QVBoxLayout(g_opt)
+        g_opt = QGroupBox("Traitement")
+        l_opt = QGridLayout(g_opt)
         self.mode_combo = QComboBox()
         for label in MODES:
             self.mode_combo.addItem(label, MODES[label])
         self.mode_combo.currentIndexChanged.connect(self.apply_options)
-        l_opt.addWidget(QLabel("Mode"))
-        l_opt.addWidget(self.mode_combo)
-        self.sl_anon = QSlider(Qt.Orientation.Horizontal)
-        self.sl_anon.setRange(5, 100)
-        self.sl_anon.setValue(60)
+        self.sl_anon = QSlider(Qt.Orientation.Horizontal); self.sl_anon.setRange(5, 100); self.sl_anon.setValue(60)
         self.sl_anon.valueChanged.connect(self.apply_options)
-        l_opt.addWidget(QLabel("Intensité du flou / pixels"))
-        l_opt.addWidget(self.sl_anon)
-        self.cb_swap = QCheckBox("Activer le traitement")
-        self.cb_swap.setChecked(True)
-        self.cb_enh = QCheckBox("Améliorer le visage (GFPGAN)")
+        self.cb_swap = QCheckBox("Traitement actif"); self.cb_swap.setChecked(True)
+        self.cb_enh = QCheckBox("GFPGAN (lent)")
         self.cb_many = QCheckBox("Tous les visages")
-        self.cb_mirror = QCheckBox("Miroir (prévisualisation)")
-        self.cb_mirror.setChecked(True)
-        self.sl_blend = QSlider(Qt.Orientation.Horizontal)
-        self.sl_blend.setRange(0, 100)
-        self.sl_blend.setValue(80)
+        self.cb_mirror = QCheckBox("Miroir"); self.cb_mirror.setChecked(True)
         for cb in (self.cb_swap, self.cb_enh, self.cb_many, self.cb_mirror):
             cb.toggled.connect(self.apply_options)
-            l_opt.addWidget(cb)
+        self.sl_blend = QSlider(Qt.Orientation.Horizontal); self.sl_blend.setRange(0, 100); self.sl_blend.setValue(80)
         self.sl_blend.valueChanged.connect(self.apply_options)
-        l_opt.addWidget(QLabel("Intensité de l'amélioration"))
-        l_opt.addWidget(self.sl_blend)
         self.cu_combo = QComboBox()
         for label in COMPUTE_UNITS:
             self.cu_combo.addItem(label, COMPUTE_UNITS[label])
         self.cu_combo.setToolTip("Unité CoreML pour le modèle de swap. « Neural Engine seul » évite le partage du GPU avec l'affichage.")
         self.cu_combo.setCurrentIndex(max(0, list(COMPUTE_UNITS.values()).index(self.engine.settings.compute_units)))
         self.cu_combo.currentIndexChanged.connect(self.change_compute_units)
-        l_opt.addWidget(QLabel("Calcul du swap"))
-        l_opt.addWidget(self.cu_combo)
         self.q_combo = QComboBox()
         for label in SWAP_QUALITIES:
             self.q_combo.addItem(label, SWAP_QUALITIES[label])
         self.q_combo.setCurrentIndex(max(0, list(SWAP_QUALITIES.values()).index(self.engine.settings.swap_quality)))
         self.q_combo.setToolTip("Qualité : poids int8, fidèle au modèle d'origine. Rapide : palette 6 bits, ~20 % plus rapide, écart invisible à l'œil.")
         self.q_combo.currentIndexChanged.connect(self.change_swap_quality)
-        l_opt.addWidget(QLabel("Modèle de swap"))
-        l_opt.addWidget(self.q_combo)
+        r = 0
+        l_opt.addWidget(QLabel("Mode"), r, 0); l_opt.addWidget(self.mode_combo, r, 1); r += 1
+        l_opt.addWidget(QLabel("Flou / pixels"), r, 0); l_opt.addWidget(self.sl_anon, r, 1); r += 1
+        l_opt.addWidget(self.cb_swap, r, 0); l_opt.addWidget(self.cb_many, r, 1); r += 1
+        l_opt.addWidget(self.cb_mirror, r, 0); l_opt.addWidget(self.cb_enh, r, 1); r += 1
+        l_opt.addWidget(QLabel("GFPGAN"), r, 0); l_opt.addWidget(self.sl_blend, r, 1); r += 1
+        l_opt.addWidget(QLabel("Modèle"), r, 0); l_opt.addWidget(self.q_combo, r, 1); r += 1
+        l_opt.addWidget(QLabel("Calcul"), r, 0); l_opt.addWidget(self.cu_combo, r, 1); r += 1
+        l_opt.setColumnStretch(1, 1)
+        for combo in (self.cam_combo, self.res_combo, self.mode_combo, self.q_combo, self.cu_combo):
+            combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+            combo.setMinimumContentsLength(10)
 
-        g_out = QGroupBox("Sortie")
-        l_out = QVBoxLayout(g_out)
-        self.btn_vcam = QPushButton("Démarrer la caméra virtuelle")
-        self.btn_vcam.clicked.connect(self.toggle_vcam)
-        self.btn_vcam.setEnabled(False)
-        l_out.addWidget(self.btn_vcam)
-
-        for g in (g_src, g_cam, g_opt, g_out):
+        for g in (g_src, g_cam, g_opt):
             panel.addWidget(g)
         panel.addStretch(1)
         side = QWidget()
         side.setLayout(panel)
-        side.setFixedWidth(260)
+        scroll = QScrollArea()
+        scroll.setWidget(side)
+        scroll.setWidgetResizable(True)
+        scroll.setFixedWidth(360)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
 
         root = QWidget()
         lay = QHBoxLayout(root)
         lay.addWidget(self.preview, 1)
-        lay.addWidget(side)
+        lay.addWidget(scroll)
         self.setCentralWidget(root)
 
         self.status = QStatusBar()
@@ -360,14 +356,14 @@ class MainWindow(QMainWindow):
         if not ok:
             QMessageBox.warning(self, "Image", "Aucun visage détecté dans cette image.")
             return
-        pix = QPixmap(path).scaled(220, 220, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        pix = QPixmap(path).scaled(96, 96, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
         self.src_thumb.setPixmap(pix)
         self.status.showMessage(f"Visage source : {os.path.basename(path)}")
 
     def clear_source(self):
         self.engine.clear_source()
         self.src_thumb.clear()
-        self.src_thumb.setText("Aucune image")
+        self.src_thumb.setText("Aucune\nimage")
 
     # ---------- options
     def apply_options(self):
@@ -461,7 +457,8 @@ class MainWindow(QMainWindow):
     def toggle_vcam(self):
         if self.vcam.active:
             self.vcam.stop()
-            self.btn_vcam.setText("Démarrer la caméra virtuelle")
+            self.btn_vcam.setChecked(False)
+            self.btn_vcam.setText("Caméra virtuelle")
             self.status.showMessage("Caméra virtuelle arrêtée")
             return
         if not self.camera:
@@ -469,9 +466,11 @@ class MainWindow(QMainWindow):
         try:
             dev = self.vcam.start(self.camera.width, self.camera.height, 30)
         except Exception as e:  # noqa: BLE001
+            self.btn_vcam.setChecked(False)
             QMessageBox.warning(self, "Caméra virtuelle", str(e))
             return
-        self.btn_vcam.setText("Arrêter la caméra virtuelle")
+        self.btn_vcam.setChecked(True)
+        self.btn_vcam.setText("Caméra virtuelle : active")
         self.status.showMessage(f"Caméra virtuelle active : {dev} — sélectionne-la dans Zoom/Meet/Teams")
 
     def closeEvent(self, event):
