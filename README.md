@@ -30,6 +30,12 @@ Pourquoi ça marche : le réseau pèse 349 GFLOP mais surtout ~250 Mo de poids p
 limité par la bande passante mémoire, et les poids int8 la divisent par deux (120 ms fp16 natif → 48 ms, écart moyen 0,003).
 Le moteur utilise ce modèle s'il est présent, sinon ONNX Runtime (`FACECAM_NO_COREML=1` pour forcer le repli).
 
+## Modes
+
+- **Remplacer le visage (swap)** : le visage de la photo source remplace le tien.
+- **Flouter / Pixelliser / Masquer** : anonymisation sans photo source, tous les visages détectés, ellipse à bords doux,
+  curseur d'intensité. Seule la détection tourne : ~30 fps (plus de 60 fps à vide).
+
 ## Lancer en développement
 
 ```bash

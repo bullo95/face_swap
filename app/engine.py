@@ -61,6 +61,13 @@ SWAP_QUALITIES = {  # libellé UI -> clé
 }
 DEFAULT_SWAP_QUALITY = "quality"
 
+MODES = {  # libellé UI -> clé
+    "Remplacer le visage (swap)": "swap",
+    "Flouter le visage": "blur",
+    "Pixelliser le visage": "pixelate",
+    "Masquer le visage (noir)": "mask",
+}
+
 
 def providers(compute_units: str = "ALL") -> list:
     """CoreML si disponible (Apple Silicon), sinon CPU."""
@@ -81,6 +88,8 @@ class Settings:
     det_size: int = 320            # résolution du détecteur (320 rapide, 640 précis)
     compute_units: str = DEFAULT_COMPUTE_UNITS  # unité CoreML pour le swapper (voir COMPUTE_UNITS)
     swap_quality: str = DEFAULT_SWAP_QUALITY    # "quality" (int8) ou "fast" (palette 6 bits), modèles CoreML natifs
+    mode: str = "swap"                          # voir MODES ; les modes d'anonymisation traitent tous les visages
+    anonymize_strength: float = 0.6             # 0..1 : force du flou / taille des pixels
 
 
 class FaceEngine:
@@ -241,13 +250,23 @@ class FaceEngine:
         return faces
 
     def process(self, frame: np.ndarray, faces: Optional[list] = None) -> np.ndarray:
-        """Swap complet. Si `faces` est fourni (détection déjà faite en parallèle), on ne redétecte pas."""
+        """Traitement d'une image selon le mode. Si `faces` est fourni (détection faite en parallèle), on ne redétecte pas."""
+        import time
+        st = self.stats
+        if self.settings.mode != "swap":
+            if faces is None:
+                faces = self.detect(frame)
+            st["n"] += 1
+            if not faces:
+                return frame
+            t0 = time.perf_counter()
+            out = self._anonymize(frame, faces)
+            st["paste"] += time.perf_counter() - t0
+            return out
         with self._lock:
             src = self.source_face
         if src is None or self._latent is None or self.swapper is None:
             return frame
-        import time
-        st = self.stats
         if faces is None:
             faces = self.detect(frame)
         st["n"] += 1
@@ -268,6 +287,37 @@ class FaceEngine:
             if self.settings.enhance and self.enhancer is not None:
                 out = self._enhance_face(out, face.kps)
                 st["enhance"] += time.perf_counter() - t2
+        return out
+
+    def _anonymize(self, frame: np.ndarray, faces: list) -> np.ndarray:
+        """Flou / pixellisation / masque sur chaque visage, dans une ellipse à bords doux (limité à la ROI)."""
+        mode = self.settings.mode
+        k = float(np.clip(self.settings.anonymize_strength, 0.05, 1.0))
+        h, w = frame.shape[:2]
+        out = frame.copy()
+        for face in faces:
+            x0, y0, x1, y1 = face.bbox[:4]
+            cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+            rw, rh = (x1 - x0) * 0.75, (y1 - y0) * 0.85  # demi-axes : ellipse un peu plus large que la bbox
+            X0, Y0 = int(max(0, cx - rw - 8)), int(max(0, cy - rh - 8))
+            X1, Y1 = int(min(w, cx + rw + 8)), int(min(h, cy + rh + 8))
+            if X1 - X0 < 4 or Y1 - Y0 < 4:
+                continue
+            roi = out[Y0:Y1, X0:X1]
+            size = max(x1 - x0, y1 - y0)
+            if mode == "blur":
+                sigma = max(2.0, size * 0.12 * k)
+                fx = cv2.GaussianBlur(roi, (0, 0), sigma)
+            elif mode == "pixelate":
+                n = int(max(3, round(16 - 12 * k)))  # 16 blocs (léger) -> 4 blocs (fort)
+                small = cv2.resize(roi, (max(1, roi.shape[1] * n // max(roi.shape[:2])), max(1, roi.shape[0] * n // max(roi.shape[:2]))), interpolation=cv2.INTER_LINEAR)
+                fx = cv2.resize(small, (roi.shape[1], roi.shape[0]), interpolation=cv2.INTER_NEAREST)
+            else:
+                fx = np.zeros_like(roi)
+            mask = np.zeros(roi.shape[:2], dtype=np.float32)
+            cv2.ellipse(mask, (int(cx - X0), int(cy - Y0)), (int(rw), int(rh)), 0, 0, 360, 1.0, -1)
+            mask = cv2.GaussianBlur(mask, (0, 0), max(1.0, size * 0.04))[:, :, None]
+            out[Y0:Y1, X0:X1] = (fx * mask + roi * (1.0 - mask)).astype(np.uint8)
         return out
 
     def pop_stats(self) -> str:

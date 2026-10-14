@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from .camera import Camera, list_cameras, request_camera_access, set_thread_qos_interactive
-from .engine import COMPUTE_UNITS, DEFAULT_COMPUTE_UNITS, DEFAULT_SWAP_QUALITY, SWAP_QUALITIES, FaceEngine, Settings
+from .engine import COMPUTE_UNITS, DEFAULT_COMPUTE_UNITS, DEFAULT_SWAP_QUALITY, MODES, SWAP_QUALITIES, FaceEngine, Settings
 from .vcam import VirtualCamera
 
 LOG_PATH = os.path.expanduser("~/Library/Logs/FaceCam.log")
@@ -103,15 +103,15 @@ class Worker(QThread):
                 if now - t_log > 5:
                     ru = resource.getrusage(resource.RUSAGE_SELF); cpu_now = ru.ru_utime + ru.ru_stime
                     cores = (cpu_now - cpu_prev) / (now - t_log); cpu_prev = cpu_now
-                    log.info("worker: %.1f fps, %.1f cœurs CPU, swap=%s enhance=%s many=%s cu=%s | %s",
-                             fps, cores, self.swap_enabled, self.engine.settings.enhance, self.engine.settings.many_faces,
-                             self.engine.settings.compute_units, self.engine.pop_stats())
+                    log.info("worker: %.1f fps, %.1f cœurs CPU, mode=%s on=%s enhance=%s many=%s cu=%s | %s",
+                             fps, cores, self.engine.settings.mode, self.swap_enabled, self.engine.settings.enhance,
+                             self.engine.settings.many_faces, self.engine.settings.compute_units, self.engine.pop_stats())
                     t_log = now
                 if frame is None:
                     n_none += 1
                     continue
                 n_frames += 1
-                if not self.swap_enabled or self.engine.source_face is None:
+                if not self.swap_enabled or (self.engine.settings.mode == "swap" and self.engine.source_face is None):
                     pending = None
                     self._emit(frame, fps := self._fps(fps, t_prev)); t_prev = time.perf_counter()
                     continue
@@ -205,7 +205,19 @@ class MainWindow(QMainWindow):
 
         g_opt = QGroupBox("Options")
         l_opt = QVBoxLayout(g_opt)
-        self.cb_swap = QCheckBox("Activer le swap")
+        self.mode_combo = QComboBox()
+        for label in MODES:
+            self.mode_combo.addItem(label, MODES[label])
+        self.mode_combo.currentIndexChanged.connect(self.apply_options)
+        l_opt.addWidget(QLabel("Mode"))
+        l_opt.addWidget(self.mode_combo)
+        self.sl_anon = QSlider(Qt.Orientation.Horizontal)
+        self.sl_anon.setRange(5, 100)
+        self.sl_anon.setValue(60)
+        self.sl_anon.valueChanged.connect(self.apply_options)
+        l_opt.addWidget(QLabel("Intensité du flou / pixels"))
+        l_opt.addWidget(self.sl_anon)
+        self.cb_swap = QCheckBox("Activer le traitement")
         self.cb_swap.setChecked(True)
         self.cb_enh = QCheckBox("Améliorer le visage (GFPGAN)")
         self.cb_many = QCheckBox("Tous les visages")
@@ -363,6 +375,8 @@ class MainWindow(QMainWindow):
         s.enhance = self.cb_enh.isChecked()
         s.many_faces = self.cb_many.isChecked()
         s.enhance_blend = self.sl_blend.value() / 100.0
+        s.mode = self.mode_combo.currentData()
+        s.anonymize_strength = self.sl_anon.value() / 100.0
         if self.worker:
             self.worker.swap_enabled = self.cb_swap.isChecked()
             self.worker.mirror_preview = self.cb_mirror.isChecked()
