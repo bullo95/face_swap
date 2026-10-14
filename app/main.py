@@ -483,7 +483,7 @@ class MainWindow(QMainWindow):
             return
         self.btn_vcam.setChecked(True)
         self.btn_vcam.setText("Caméra virtuelle : active")
-        self.status.showMessage(f"Caméra virtuelle active : {dev} — sélectionne-la dans Zoom/Meet/Teams")
+        self.status.showMessage(f"Caméra virtuelle active : {dev} — sélectionne « FaceCam Camera » dans Zoom/Meet/FaceTime")
 
     def closeEvent(self, event):
         self.stop_camera()

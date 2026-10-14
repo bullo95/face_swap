@@ -1,0 +1,41 @@
+name: FaceCamCamera
+options:
+  bundleIdPrefix: fr.bruno
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: 57LHMQV3Y5
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.9"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+targets:
+  FaceCamCamera:
+    type: application
+    platform: macOS
+    sources: [HostApp]
+    dependencies:
+      - target: FaceCamCameraExtension
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.bruno.facecamcamera
+        PRODUCT_NAME: FaceCam Camera
+        CODE_SIGN_ENTITLEMENTS: HostApp/FaceCamCamera.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        INFOPLIST_FILE: HostApp/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+  FaceCamCameraExtension:
+    type: system-extension
+    platform: macOS
+    sources: [Extension]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.bruno.facecamcamera.Extension
+        PRODUCT_NAME: fr.bruno.facecamcamera.Extension
+        CODE_SIGN_ENTITLEMENTS: Extension/FaceCamCameraExtension.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        INFOPLIST_FILE: Extension/Info.plist
+        GENERATE_INFOPLIST_FILE: NO

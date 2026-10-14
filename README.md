@@ -49,9 +49,19 @@ compilées, chargées en 2 à 3 s, car charger un `.mlpackage` depuis le bundle 
 3. **Démarrer la caméra virtuelle** : publie le flux dans « OBS Virtual Camera ».
    Puis sélectionne cette caméra dans Zoom/Meet/Teams.
 
-Prérequis caméra virtuelle (une seule fois) : installer OBS (`brew install --cask obs`), le lancer,
-cliquer **Démarrer la caméra virtuelle** et autoriser l'extension dans
-*Réglages Système › Général › Ouverture de session et extensions › Extensions de caméra*.
+### Caméra virtuelle « FaceCam Camera » (sans OBS)
+
+Extension caméra CoreMediaIO dédiée, dans `FaceCamCamera/` : une app hôte native minimale (« FaceCam Camera »)
+embarque l'extension et l'installe ; FaceCam pousse ensuite ses images dans le flux d'entrée de la caméra via
+`libfacecam_cmio.dylib` (client CoreMediaIO en Swift, appelé par ctypes).
+
+```bash
+./FaceCamCamera/build_and_install.sh     # nécessite un compte Apple connecté dans Xcode (équipe 57LHMQV3Y5)
+open "/Applications/FaceCam Camera.app"   # « Installer l'extension », puis autoriser dans Réglages Système
+```
+
+Réglages Système › Général › Ouverture de session et extensions › Extensions de caméra. La caméra « FaceCam Camera »
+(1280x720, 30 fps) apparaît alors dans Zoom, Meet, FaceTime… ; sans flux de FaceCam, elle diffuse une mire sombre.
 
 ## Performances mesurées (M4, 1280x720, un visage)
 
@@ -95,7 +105,8 @@ Pour une autorisation durable, signer avec un certificat stable (Developer ID ou
 - `app/engine.py` — chargement des modèles, détection, swap, collage ROI, GFPGAN
 - `app/camera.py` — capture AVFoundation dans un thread ; caméras identifiées par leur uniqueID AVFoundation,
   l'index OpenCV étant recalculé à l'ouverture (l'ordre de la liste change avec la caméra par défaut du système)
-- `app/vcam.py` — sortie caméra virtuelle (pyvirtualcam / extension OBS)
+- `app/vcam.py` + `app/facecam_cmio.py` — sortie vers la caméra virtuelle FaceCam Camera (client CoreMediaIO)
+- `FaceCamCamera/` — extension caméra CoreMediaIO (Swift) + app hôte, projet XcodeGen
 - `app/main.py` — interface PySide6
 - `scripts/test_swap.py` — test hors caméra : `python scripts/test_swap.py source.jpg cible.jpg sortie.jpg`
 

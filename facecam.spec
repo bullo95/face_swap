@@ -28,7 +28,7 @@ datas += collect_data_files("coremltools")
 a = Analysis(
     ["launcher.py"],
     pathex=[root],
-    binaries=[],
+    binaries=[("FaceCamCamera/Client/libfacecam_cmio.dylib", ".")] if os.path.exists("FaceCamCamera/Client/libfacecam_cmio.dylib") else [],
     datas=datas,
     hiddenimports=hidden,
     hookspath=[],

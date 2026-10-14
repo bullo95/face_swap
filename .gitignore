@@ -7,3 +7,6 @@ dist/
 *.mlpackage
 *.mlmodelc
 .DS_Store
+FaceCamCamera/build/
+FaceCamCamera/*.xcodeproj
+FaceCamCamera/Client/*.dylib

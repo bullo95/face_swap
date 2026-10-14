@@ -1,10 +1,9 @@
-"""Sortie vers la caméra virtuelle OBS (extension CoreMediaIO) via pyvirtualcam."""
+"""Sortie vers la caméra virtuelle « FaceCam Camera » (extension CoreMediaIO du projet FaceCamCamera/)."""
 from __future__ import annotations
 
 import logging
 from typing import Optional
 
-import cv2
 import numpy as np
 
 log = logging.getLogger(__name__)
@@ -19,35 +18,33 @@ class VirtualCamera:
     def active(self) -> bool:
         return self._cam is not None
 
+    @staticmethod
+    def installed() -> bool:
+        try:
+            from .facecam_cmio import is_installed
+            return is_installed()
+        except Exception:  # noqa: BLE001
+            return False
+
     def start(self, width: int, height: int, fps: int = 30):
-        import pyvirtualcam
-        from pyvirtualcam import PixelFormat
+        from .facecam_cmio import FaceCamVirtualCamera, is_installed
 
         self.stop()
-        last_err: Optional[Exception] = None
-        # macOS 14+ : extension système OBS ; plus ancien : plugin DAL.
-        for backend in ("obs", None):
-            try:
-                self._cam = pyvirtualcam.Camera(width=width, height=height, fps=fps, fmt=PixelFormat.BGR, backend=backend)
-                break
-            except Exception as e:  # noqa: BLE001
-                last_err = e
-                self._cam = None
-        if self._cam is None:
+        if not is_installed():
             raise RuntimeError(
-                "Caméra virtuelle indisponible. Lance OBS une fois, clique « Démarrer la caméra virtuelle » "
-                "et autorise l'extension dans Réglages Système > Général > Ouverture de session et extensions. "
-                f"Détail : {last_err}"
+                "« FaceCam Camera » n'est pas installée. Ouvre l'app « FaceCam Camera » (dossier Applications), "
+                "clique « Installer l'extension » et autorise-la dans Réglages Système › Général › "
+                "Ouverture de session et extensions › Extensions de caméra."
             )
-        self.width, self.height = width, height
-        log.info("Caméra virtuelle : %s (%dx%d@%d)", self._cam.device, width, height, fps)
-        return self._cam.device
+        # l'extension diffuse en 1280x720 : on envoie ce format quelle que soit la capture
+        self._cam = FaceCamVirtualCamera(1280, 720)
+        self.width, self.height = 1280, 720
+        log.info("Caméra virtuelle FaceCam Camera : %dx%d", self.width, self.height)
+        return "FaceCam Camera"
 
     def send(self, frame_bgr: np.ndarray):
         if self._cam is None:
             return
-        if frame_bgr.shape[1] != self.width or frame_bgr.shape[0] != self.height:
-            frame_bgr = cv2.resize(frame_bgr, (self.width, self.height))
         self._cam.send(frame_bgr)
 
     def stop(self):
