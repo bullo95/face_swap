@@ -26,3 +26,4 @@ INSIGHTFACE_ROOT = os.path.join(MODELS_DIR, "insightface")
 INSWAPPER_PATH = os.path.join(MODELS_DIR, "inswapper_128.onnx")
 INSWAPPER_FP16_PATH = os.path.join(MODELS_DIR, "inswapper_128_fp16.onnx")
 GFPGAN_PATH = os.path.join(MODELS_DIR, "gfpgan_1.4.onnx")
+INSWAPPER_COREML_PATH = os.path.join(MODELS_DIR, "inswapper_128_int8.mlpackage")  # CoreML natif, poids int8

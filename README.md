@@ -8,10 +8,24 @@ et renvoie le résultat dans une **caméra virtuelle** utilisable dans Zoom, Mee
 | Rôle | Modèle | Source |
 |---|---|---|
 | Détection + points clés | `buffalo_l` (SCRFD 10G + ArcFace r50) | insightface |
-| Swap | `inswapper_128_fp16.onnx` (fp32 en secours) | facefusion-assets |
+| Swap | `inswapper_128_int8.mlpackage` (CoreML natif, généré localement) ; repli `inswapper_128_fp16.onnx` | facefusion-assets + `scripts/convert_inswapper_coreml.py` |
 | Amélioration (optionnelle) | `gfpgan_1.4.onnx` | facefusion-assets |
 
 Ils sont dans `models/` (≈1,4 Go, hors git). Pour les retélécharger : voir `scripts/download_models.sh`.
+
+### Modèle de swap CoreML natif (recommandé)
+
+Le swap est 1,6 à 2,5 fois plus rapide avec une version CoreML native d'inswapper aux poids int8 :
+
+```bash
+.venv/bin/pip install torch onnx2torch coremltools
+.venv/bin/python scripts/convert_inswapper_coreml.py      # ONNX -> PyTorch -> CoreML fp16 (+ fusion instance_norm)
+.venv/bin/python scripts/quantize_inswapper_coreml.py     # poids int8 par canal -> models/inswapper_128_int8.mlpackage
+```
+
+Pourquoi ça marche : le réseau pèse 349 GFLOP mais surtout ~250 Mo de poids par inférence ; sur le Neural Engine il est
+limité par la bande passante mémoire, et les poids int8 la divisent par deux (120 ms fp16 natif → 48 ms, écart moyen 0,003).
+Le moteur utilise ce modèle s'il est présent, sinon ONNX Runtime (`FACECAM_NO_COREML=1` pour forcer le repli).
 
 ## Lancer en développement
 
@@ -33,9 +47,9 @@ cliquer **Démarrer la caméra virtuelle** et autoriser l'extension dans
 | Étape | Latence |
 |---|---|
 | Détection (SCRFD) | ~5 ms |
-| inswapper fp16 (CoreML MLProgram) | ~49 ms |
+| inswapper CoreML natif int8, Neural Engine seul | ~48 ms (ONNX Runtime : 79 ms NE seul, 49 ms NE+GPU à vide) |
 | Collage ROI | ~15 ms |
-| **Total swap** | **~74 ms → ~13 fps** |
+| **Total swap** | **~63 ms → ~16 fps à vide** |
 | + GFPGAN | +~270 ms → ~3 fps |
 
 L'amélioration GFPGAN est donc à réserver aux cas où la netteté prime sur la fluidité.

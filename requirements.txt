@@ -6,3 +6,7 @@ pyvirtualcam
 PySide6
 Pillow
 pyobjc-framework-AVFoundation
+coremltools
+pyobjc-framework-CoreML
+# conversion uniquement (scripts/convert_inswapper_coreml.py) :
+# torch onnx2torch

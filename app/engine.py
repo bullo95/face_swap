@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from .paths import GFPGAN_PATH, INSIGHTFACE_ROOT, INSWAPPER_FP16_PATH, INSWAPPER_PATH
+from .paths import GFPGAN_PATH, INSIGHTFACE_ROOT, INSWAPPER_COREML_PATH, INSWAPPER_FP16_PATH, INSWAPPER_PATH
 
 log = logging.getLogger(__name__)
 
@@ -115,10 +115,8 @@ class FaceEngine:
         swap_path = INSWAPPER_FP16_PATH if os.path.exists(INSWAPPER_FP16_PATH) else INSWAPPER_PATH
         if not os.path.exists(swap_path):
             raise FileNotFoundError(f"Modèle manquant : {INSWAPPER_PATH}")
-        log.info("swapper: %s", os.path.basename(swap_path))
         self._swap_path = swap_path
-        self.swapper = insightface.model_zoo.get_model(
-            swap_path, providers=providers(self.settings.compute_units), sess_options=session_options())
+        self.swapper = self._make_swapper(swap_path, self.settings.compute_units)
 
         if os.path.exists(GFPGAN_PATH):
             if progress:
@@ -151,12 +149,25 @@ class FaceEngine:
         except Exception:  # noqa: BLE001
             log.exception("self-test")
 
+    def _make_swapper(self, onnx_path: str, cu: str):
+        """CoreML natif int8 si disponible (48 ms sur Neural Engine seul, mesuré M4), sinon ONNX Runtime (79 ms)."""
+        import insightface
+        if os.path.isdir(INSWAPPER_COREML_PATH) and not os.environ.get("FACECAM_NO_COREML"):
+            try:
+                from .coreml_swapper import CoreMLSwapper
+                sw = CoreMLSwapper(INSWAPPER_COREML_PATH, INSWAPPER_PATH if os.path.exists(INSWAPPER_PATH) else onnx_path, cu)
+                log.info("swapper: CoreML natif %s (%s)", os.path.basename(INSWAPPER_COREML_PATH), cu)
+                return sw
+            except Exception:  # noqa: BLE001
+                log.exception("CoreML natif indisponible, repli ONNX Runtime")
+        log.info("swapper: ONNX Runtime %s (%s)", os.path.basename(onnx_path), cu)
+        return insightface.model_zoo.get_model(onnx_path, providers=providers(cu), sess_options=session_options())
+
     def set_compute_units(self, cu: str):
         """Recharge uniquement la session du swapper avec une autre unité CoreML (~1 s)."""
-        import insightface
         if cu == self.settings.compute_units or self._swap_path is None:
             return
-        new = insightface.model_zoo.get_model(self._swap_path, providers=providers(cu), sess_options=session_options())
+        new = self._make_swapper(self._swap_path, cu)
         with self._lock:
             self.swapper = new
             self.settings.compute_units = cu

@@ -8,11 +8,15 @@ datas = []
 # Modèles (≈1,4 Go) copiés dans Contents/MacOS/models (voir app/paths.py : dossier de l'exécutable).
 for f in glob.glob("models/*.onnx"):
     datas.append((f, "models"))
+# modèle CoreML natif int8 (dossier .mlpackage) : copié tel quel dans models/
+if os.path.isdir("models/inswapper_128_int8.mlpackage"):
+    datas.append(("models/inswapper_128_int8.mlpackage", "models/inswapper_128_int8.mlpackage"))
 for f in glob.glob("models/insightface/models/buffalo_l/*.onnx"):
     datas.append((f, "models/insightface/models/buffalo_l"))
 datas += collect_data_files("insightface")
 
-hidden = collect_submodules("insightface") + ["pyvirtualcam", "PySide6.QtGui", "PySide6.QtWidgets", "PySide6.QtCore"]
+hidden = collect_submodules("insightface") + ["pyvirtualcam", "PySide6.QtGui", "PySide6.QtWidgets", "PySide6.QtCore", "coremltools", "coremltools.models", "coremltools.proto"]
+datas += collect_data_files("coremltools")
 
 a = Analysis(
     ["launcher.py"],
