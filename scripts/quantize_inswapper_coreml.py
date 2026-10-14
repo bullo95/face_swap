@@ -1,7 +1,9 @@
-"""Quantifie les poids du modèle CoreML natif d'inswapper (int8 par canal ; essais int4 et palette 4 bits),
-compare fidélité et latence Neural Engine, écrit des images de contrôle.
+"""Produit les deux modèles CoreML natifs d'inswapper à partir du fp16 (cible macOS 15) :
+  - models/inswapper_128_int8.mlpackage : poids int8 par canal  (Qualité, 48 ms, écart 0,003)
+  - models/inswapper_128_p6.mlpackage   : palette 6 bits groupée (Rapide, 39 ms, écart 0,009)
+et compare fidélité / latence Neural Engine (nécessite scikit-learn pour la palette).
 
-Usage : .venv/bin/python scripts/quantize_inswapper_coreml.py [models/inswapper_128.mlpackage] [models/inswapper_128_int8.mlpackage]
+Usage : .venv/bin/python scripts/quantize_inswapper_coreml.py [models/inswapper_128.mlpackage]
 """
 import os, sys, time, glob
 import numpy as np, cv2
@@ -11,7 +13,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = "/private/tmp/claude-502/-Volumes-WKLD-Projets-deepfake/c7a2d22b-ed0e-459c-b8a9-2b8a10717923/scratchpad/out"
 
 src = sys.argv[1] if len(sys.argv) > 1 else "models/inswapper_128.mlpackage"
-dst = sys.argv[2] if len(sys.argv) > 2 else "models/inswapper_128_int8.mlpackage"
+dst = "models/inswapper_128_int8.mlpackage"
+dst_fast = "models/inswapper_128_p6.mlpackage"
 
 from app.engine import FaceEngine, Settings
 from insightface.utils import face_align
@@ -47,8 +50,7 @@ def evaluate(label, m):
 evaluate("fp16 (référence)", ref_m)
 variants = {
     "int8 par canal": lambda: cto.linear_quantize_weights(base, cto.OptimizationConfig(global_config=cto.OpLinearQuantizerConfig(mode="linear_symmetric", dtype="int8", granularity="per_channel"))),
-    "int4 par bloc32": lambda: cto.linear_quantize_weights(base, cto.OptimizationConfig(global_config=cto.OpLinearQuantizerConfig(mode="linear_symmetric", dtype="int4", granularity="per_block", block_size=32))),
-    "palette4 par canal": lambda: cto.palettize_weights(base, cto.OptimizationConfig(global_config=cto.OpPalettizerConfig(mode="kmeans", nbits=4, granularity="per_grouped_channel", group_size=16))),
+    "palette6 groupe32": lambda: cto.palettize_weights(base, cto.OptimizationConfig(global_config=cto.OpPalettizerConfig(mode="kmeans", nbits=6, granularity="per_grouped_channel", group_size=32))),
 }
 results = {}
 for label, mk in variants.items():
@@ -61,6 +63,7 @@ for label, mk in variants.items():
         print(f"{label}: échec {repr(e)[:160]}")
 # le modèle int8 est la version retenue
 import shutil
-if "int8 par canal" in results:
-    if os.path.exists(dst): shutil.rmtree(dst)
-    shutil.copytree(results["int8 par canal"], dst); print("retenu :", dst)
+for key, target in (("int8 par canal", dst), ("palette6 groupe32", dst_fast)):
+    if key in results:
+        if os.path.exists(target): shutil.rmtree(target)
+        shutil.copytree(results[key], target); print("écrit :", target)

@@ -20,8 +20,11 @@ Le swap est 1,6 à 2,5 fois plus rapide avec une version CoreML native d'inswapp
 ```bash
 .venv/bin/pip install torch onnx2torch coremltools
 .venv/bin/python scripts/convert_inswapper_coreml.py      # ONNX -> PyTorch -> CoreML fp16 (+ fusion instance_norm)
-.venv/bin/python scripts/quantize_inswapper_coreml.py     # poids int8 par canal -> models/inswapper_128_int8.mlpackage
+.venv/bin/python scripts/quantize_inswapper_coreml.py     # -> inswapper_128_int8.mlpackage (Qualité) et inswapper_128_p6.mlpackage (Rapide)
 ```
+
+Le menu **Modèle de swap** choisit entre *Qualité* (poids int8, 48 ms, écart 0,003 vs fp16) et *Rapide*
+(palette 6 bits, 39 ms, écart 0,009, invisible à l'œil). Rechargement à chaud, préférence mémorisée.
 
 Pourquoi ça marche : le réseau pèse 349 GFLOP mais surtout ~250 Mo de poids par inférence ; sur le Neural Engine il est
 limité par la bande passante mémoire, et les poids int8 la divisent par deux (120 ms fp16 natif → 48 ms, écart moyen 0,003).
@@ -47,9 +50,9 @@ cliquer **Démarrer la caméra virtuelle** et autoriser l'extension dans
 | Étape | Latence |
 |---|---|
 | Détection (SCRFD) | ~5 ms |
-| inswapper CoreML natif int8, Neural Engine seul | ~48 ms (ONNX Runtime : 79 ms NE seul, 49 ms NE+GPU à vide) |
+| inswapper CoreML natif, Neural Engine seul | 48 ms (int8) / 39 ms (palette 6 bits) ; ONNX Runtime : 79 ms |
 | Collage ROI | ~15 ms |
-| **Total swap** | **~63 ms → ~16 fps à vide** |
+| **Total swap** | **~63 ms → 15,5 fps (Qualité), 19 fps (Rapide), à vide** |
 | + GFPGAN | +~270 ms → ~3 fps |
 
 L'amélioration GFPGAN est donc à réserver aux cas où la netteté prime sur la fluidité.
@@ -73,8 +76,8 @@ et les threads ONNX Runtime ne tournent pas en attente active. Journal : `~/Libr
 ./scripts/build_app.sh
 ```
 
-Produit `dist/FaceCam.app` (modèles inclus). L'app contient `NSCameraUsageDescription`,
-nécessaire pour que macOS affiche la demande d'autorisation caméra.
+Produit `dist/FaceCam.app` (modèles inclus, macOS 15 minimum à cause des modèles CoreML palettisés).
+L'app contient `NSCameraUsageDescription`, nécessaire pour que macOS affiche la demande d'autorisation caméra.
 
 ## Structure
 

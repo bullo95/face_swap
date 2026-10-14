@@ -137,7 +137,7 @@ mlmodel = ct.convert(
             ct.TensorType(name="source", shape=(1, 512), dtype=np.float32)],
     outputs=[ct.TensorType(name="output", dtype=np.float32)],
     convert_to="mlprogram", compute_precision=ct.precision.FLOAT16,
-    minimum_deployment_target=ct.target.macOS14, compute_units=ct.ComputeUnit.CPU_AND_NE,
+    minimum_deployment_target=ct.target.macOS15, compute_units=ct.ComputeUnit.CPU_AND_NE,
     pass_pipeline=pipeline,
 )
 print(f"conversion en {time.time()-t0:.0f}s")

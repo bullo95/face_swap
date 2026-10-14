@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from .camera import Camera, list_cameras, request_camera_access, set_thread_qos_interactive
-from .engine import COMPUTE_UNITS, DEFAULT_COMPUTE_UNITS, FaceEngine, Settings
+from .engine import COMPUTE_UNITS, DEFAULT_COMPUTE_UNITS, DEFAULT_SWAP_QUALITY, SWAP_QUALITIES, FaceEngine, Settings
 from .vcam import VirtualCamera
 
 LOG_PATH = os.path.expanduser("~/Library/Logs/FaceCam.log")
@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("FaceCam — face swap temps réel")
         self.resize(1180, 720)
-        self.engine = FaceEngine(Settings(compute_units=self._default_compute_units()))
+        self.engine = FaceEngine(Settings(compute_units=self._default_compute_units(), swap_quality=self._default_swap_quality()))
         self.camera: Optional[Camera] = None
         self.vcam = VirtualCamera()
         self.worker: Optional[Worker] = None
@@ -228,6 +228,14 @@ class MainWindow(QMainWindow):
         self.cu_combo.currentIndexChanged.connect(self.change_compute_units)
         l_opt.addWidget(QLabel("Calcul du swap"))
         l_opt.addWidget(self.cu_combo)
+        self.q_combo = QComboBox()
+        for label in SWAP_QUALITIES:
+            self.q_combo.addItem(label, SWAP_QUALITIES[label])
+        self.q_combo.setCurrentIndex(max(0, list(SWAP_QUALITIES.values()).index(self.engine.settings.swap_quality)))
+        self.q_combo.setToolTip("Qualité : poids int8, fidèle au modèle d'origine. Rapide : palette 6 bits, ~20 % plus rapide, écart invisible à l'œil.")
+        self.q_combo.currentIndexChanged.connect(self.change_swap_quality)
+        l_opt.addWidget(QLabel("Modèle de swap"))
+        l_opt.addWidget(self.q_combo)
 
         g_out = QGroupBox("Sortie")
         l_out = QVBoxLayout(g_out)
@@ -272,6 +280,26 @@ class MainWindow(QMainWindow):
         except Exception:  # noqa: BLE001
             pass
         return DEFAULT_COMPUTE_UNITS
+
+    @staticmethod
+    def _default_swap_quality() -> str:
+        """Préférence macOS : defaults write fr.bruno.facecam SwapQuality fast"""
+        try:
+            from Foundation import NSUserDefaults
+            v = NSUserDefaults.standardUserDefaults().stringForKey_("SwapQuality")
+            if v in SWAP_QUALITIES.values():
+                return str(v)
+        except Exception:  # noqa: BLE001
+            pass
+        return DEFAULT_SWAP_QUALITY
+
+    @staticmethod
+    def _save_pref(key: str, value: str):
+        try:
+            from Foundation import NSUserDefaults
+            NSUserDefaults.standardUserDefaults().setObject_forKey_(value, key)
+        except Exception:  # noqa: BLE001
+            pass
 
     # ---------- chargement
     def set_controls_enabled(self, on: bool):
@@ -339,12 +367,25 @@ class MainWindow(QMainWindow):
             self.worker.swap_enabled = self.cb_swap.isChecked()
             self.worker.mirror_preview = self.cb_mirror.isChecked()
 
+    def change_swap_quality(self):
+        q = self.q_combo.currentData()
+        self.status.showMessage("Rechargement du modèle de swap…")
+        QApplication.processEvents()
+        try:
+            self.engine.set_swap_quality(q)
+            self._save_pref("SwapQuality", q)
+            self.status.showMessage(f"Modèle de swap : {self.q_combo.currentText()}")
+        except Exception as e:  # noqa: BLE001
+            log.exception("swap quality")
+            QMessageBox.warning(self, "Modèle", str(e))
+
     def change_compute_units(self):
         cu = self.cu_combo.currentData()
         self.status.showMessage("Rechargement du modèle de swap…")
         QApplication.processEvents()
         try:
             self.engine.set_compute_units(cu)
+            self._save_pref("ComputeUnits", cu)
             self.status.showMessage(f"Swap sur : {self.cu_combo.currentText()}")
         except Exception as e:  # noqa: BLE001
             log.exception("compute units")

@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from .paths import GFPGAN_PATH, INSIGHTFACE_ROOT, INSWAPPER_COREML_PATH, INSWAPPER_FP16_PATH, INSWAPPER_PATH
+from .paths import GFPGAN_PATH, INSIGHTFACE_ROOT, INSWAPPER_COREML_FAST_PATH, INSWAPPER_COREML_PATH, INSWAPPER_FP16_PATH, INSWAPPER_PATH
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +55,12 @@ COMPUTE_UNITS = {  # libellé UI -> option CoreML
 }
 DEFAULT_COMPUTE_UNITS = "CPUAndNeuralEngine"
 
+SWAP_QUALITIES = {  # libellé UI -> clé
+    "Qualité (int8, 48 ms)": "quality",
+    "Rapide (palette 6 bits, 39 ms)": "fast",
+}
+DEFAULT_SWAP_QUALITY = "quality"
+
 
 def providers(compute_units: str = "ALL") -> list:
     """CoreML si disponible (Apple Silicon), sinon CPU."""
@@ -74,6 +80,7 @@ class Settings:
     many_faces: bool = False       # remplacer tous les visages ou seulement le plus grand
     det_size: int = 320            # résolution du détecteur (320 rapide, 640 précis)
     compute_units: str = DEFAULT_COMPUTE_UNITS  # unité CoreML pour le swapper (voir COMPUTE_UNITS)
+    swap_quality: str = DEFAULT_SWAP_QUALITY    # "quality" (int8) ou "fast" (palette 6 bits), modèles CoreML natifs
 
 
 class FaceEngine:
@@ -149,17 +156,23 @@ class FaceEngine:
         except Exception:  # noqa: BLE001
             log.exception("self-test")
 
-    def _make_swapper(self, onnx_path: str, cu: str):
-        """CoreML natif int8 si disponible (48 ms sur Neural Engine seul, mesuré M4), sinon ONNX Runtime (79 ms)."""
+    def _make_swapper(self, onnx_path: str, cu: str, quality: Optional[str] = None):
+        """CoreML natif si disponible : int8 (qualité, 48 ms) ou palette 6 bits (rapide, 39 ms) sur Neural Engine seul,
+        mesuré M4 ; sinon ONNX Runtime (79 ms)."""
         import insightface
-        if os.path.isdir(INSWAPPER_COREML_PATH) and not os.environ.get("FACECAM_NO_COREML"):
-            try:
-                from .coreml_swapper import CoreMLSwapper
-                sw = CoreMLSwapper(INSWAPPER_COREML_PATH, INSWAPPER_PATH if os.path.exists(INSWAPPER_PATH) else onnx_path, cu)
-                log.info("swapper: CoreML natif %s (%s)", os.path.basename(INSWAPPER_COREML_PATH), cu)
-                return sw
-            except Exception:  # noqa: BLE001
-                log.exception("CoreML natif indisponible, repli ONNX Runtime")
+        quality = quality or self.settings.swap_quality
+        candidates = [INSWAPPER_COREML_FAST_PATH, INSWAPPER_COREML_PATH] if quality == "fast" else [INSWAPPER_COREML_PATH, INSWAPPER_COREML_FAST_PATH]
+        if not os.environ.get("FACECAM_NO_COREML"):
+            for path in candidates:
+                if not os.path.isdir(path):
+                    continue
+                try:
+                    from .coreml_swapper import CoreMLSwapper
+                    sw = CoreMLSwapper(path, INSWAPPER_PATH if os.path.exists(INSWAPPER_PATH) else onnx_path, cu)
+                    log.info("swapper: CoreML natif %s (%s, %s)", os.path.basename(path), cu, quality)
+                    return sw
+                except Exception:  # noqa: BLE001
+                    log.exception("CoreML natif %s indisponible", os.path.basename(path))
         log.info("swapper: ONNX Runtime %s (%s)", os.path.basename(onnx_path), cu)
         return insightface.model_zoo.get_model(onnx_path, providers=providers(cu), sess_options=session_options())
 
@@ -172,6 +185,16 @@ class FaceEngine:
             self.swapper = new
             self.settings.compute_units = cu
         log.info("swapper rechargé avec MLComputeUnits=%s", cu)
+
+    def set_swap_quality(self, quality: str):
+        """Bascule Qualité (int8) / Rapide (palette 6 bits) en rechargeant le swapper (~1 s)."""
+        if quality == self.settings.swap_quality or self._swap_path is None:
+            return
+        new = self._make_swapper(self._swap_path, self.settings.compute_units, quality)
+        with self._lock:
+            self.swapper = new
+            self.settings.swap_quality = quality
+        log.info("swapper rechargé en mode %s", quality)
 
     # ---------- visage source ----------
     def set_source_image(self, path: str) -> bool:

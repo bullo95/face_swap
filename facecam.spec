@@ -9,8 +9,9 @@ datas = []
 for f in glob.glob("models/*.onnx"):
     datas.append((f, "models"))
 # modèle CoreML natif int8 (dossier .mlpackage) : copié tel quel dans models/
-if os.path.isdir("models/inswapper_128_int8.mlpackage"):
-    datas.append(("models/inswapper_128_int8.mlpackage", "models/inswapper_128_int8.mlpackage"))
+for pkg in ("models/inswapper_128_int8.mlpackage", "models/inswapper_128_p6.mlpackage"):
+    if os.path.isdir(pkg):
+        datas.append((pkg, pkg))
 for f in glob.glob("models/insightface/models/buffalo_l/*.onnx"):
     datas.append((f, "models/insightface/models/buffalo_l"))
 datas += collect_data_files("insightface")
@@ -54,6 +55,6 @@ app = BUNDLE(
         # pendant toute la capture (mesuré : swap 48 ms -> 134 ms caméra ouverte).
         "NSCameraReactionEffectGesturesEnabledDefault": False,
         "NSHighResolutionCapable": True,
-        "LSMinimumSystemVersion": "14.0",
+        "LSMinimumSystemVersion": "15.0",  # modèles CoreML palettisés
     },
 )
