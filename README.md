@@ -93,7 +93,8 @@ Pour une autorisation durable, signer avec un certificat stable (Developer ID ou
 ## Structure
 
 - `app/engine.py` — chargement des modèles, détection, swap, collage ROI, GFPGAN
-- `app/camera.py` — capture AVFoundation dans un thread
+- `app/camera.py` — capture AVFoundation dans un thread ; caméras identifiées par leur uniqueID AVFoundation,
+  l'index OpenCV étant recalculé à l'ouverture (l'ordre de la liste change avec la caméra par défaut du système)
 - `app/vcam.py` — sortie caméra virtuelle (pyvirtualcam / extension OBS)
 - `app/main.py` — interface PySide6
 - `scripts/test_swap.py` — test hors caméra : `python scripts/test_swap.py source.jpg cible.jpg sortie.jpg`

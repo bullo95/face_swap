@@ -43,36 +43,46 @@ def request_camera_access(timeout: float = 60.0) -> bool:
     return result["ok"]
 
 
-def _avfoundation_names() -> List[str]:
-    """Noms des caméras dans l'ordre AVFoundation (même ordre que les index OpenCV)."""
+def _avfoundation_devices() -> List[Tuple[str, str]]:
+    """(uniqueID, nom) des caméras, dans l'ordre AVFoundation `devicesWithMediaType` (celui qu'OpenCV utilise
+    pour numéroter les caméras). Cet ordre change selon la caméra par défaut du moment : ne jamais le figer."""
     try:
         import AVFoundation
         devs = AVFoundation.AVCaptureDevice.devicesWithMediaType_(AVFoundation.AVMediaTypeVideo)
-        return [str(d.localizedName()) for d in devs]
+        return [(str(d.uniqueID()), str(d.localizedName())) for d in devs]
     except Exception:  # noqa: BLE001
         return []
 
 
-def list_cameras(max_index: int = 6) -> List[Tuple[int, str]]:
-    """Énumère les caméras disponibles (index AVFoundation) avec leur nom système."""
-    names = _avfoundation_names()
+def list_cameras(max_index: int = 6) -> List[Tuple[str, str]]:
+    """Énumère les caméras : (uniqueID, nom). Sans ouvrir les caméras (pas de voyant allumé)."""
+    devs = _avfoundation_devices()
+    if devs:
+        return devs
+    # repli sans PyObjC : index OpenCV
     found = []
-    for i in range(max(len(names), 1) if names else max_index):
+    for i in range(max_index):
         cap = cv2.VideoCapture(i, cv2.CAP_AVFOUNDATION)
         if cap.isOpened():
-            ok, _ = cap.read()
-            if ok:
-                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                name = names[i] if i < len(names) else f"Caméra {i}"
-                found.append((i, f"{name} ({w}x{h})"))
+            found.append((str(i), f"Caméra {i}"))
         cap.release()
     return found
 
 
+def opencv_index_for(unique_id: str) -> int:
+    """Index OpenCV (AVFoundation) correspondant à l'identifiant unique, calculé au moment de l'ouverture."""
+    devs = _avfoundation_devices()
+    for i, (uid, _) in enumerate(devs):
+        if uid == unique_id:
+            return i
+    if unique_id.isdigit():
+        return int(unique_id)
+    raise RuntimeError("Caméra introuvable (débranchée ?) : " + unique_id)
+
+
 class Camera:
-    def __init__(self, index: int = 0, width: int = 1280, height: int = 720, fps: int = 30):
-        self.index = index
+    def __init__(self, index=0, width: int = 1280, height: int = 720, fps: int = 30):
+        self.index = index  # int (index OpenCV) ou str (uniqueID AVFoundation, résolu à l'ouverture)
         self.width, self.height, self.fps = width, height, fps
         self._cap: Optional[cv2.VideoCapture] = None
         self._frame: Optional[np.ndarray] = None
@@ -83,7 +93,8 @@ class Camera:
         self._thread: Optional[threading.Thread] = None
 
     def start(self):
-        self._cap = cv2.VideoCapture(self.index, cv2.CAP_AVFOUNDATION)
+        idx = opencv_index_for(self.index) if isinstance(self.index, str) else int(self.index)
+        self._cap = cv2.VideoCapture(idx, cv2.CAP_AVFOUNDATION)
         if not self._cap.isOpened():
             raise RuntimeError(
                 f"Impossible d'ouvrir la caméra {self.index}. Vérifie l'autorisation dans "

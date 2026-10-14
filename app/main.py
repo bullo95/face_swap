@@ -333,10 +333,14 @@ class MainWindow(QMainWindow):
         log.info("Accès caméra accordé : %s", granted)
         cams = list_cameras() if granted else []
         log.info("Caméras : %s", cams)
-        for idx, label in cams:
-            self.cam_combo.addItem(label, idx)
+        for uid, label in cams:
+            self.cam_combo.addItem(label, uid)
+        # caméra intégrée en premier choix si présente
+        for i in range(self.cam_combo.count()):
+            if "MacBook" in self.cam_combo.itemText(i) or "FaceTime" in self.cam_combo.itemText(i):
+                self.cam_combo.setCurrentIndex(i); break
         if not cams:
-            self.cam_combo.addItem("Aucune caméra détectée", -1)
+            self.cam_combo.addItem("Aucune caméra détectée", None)
             self.status.showMessage(
                 "Accès caméra refusé ou aucune caméra : Réglages Système › Confidentialité et sécurité › Caméra › FaceCam, puis « Rafraîchir la liste »."
             )
@@ -407,11 +411,11 @@ class MainWindow(QMainWindow):
             self.stop_camera()
             return
         idx = self.cam_combo.currentData()
-        if idx is None or idx < 0:
+        if idx is None:
             QMessageBox.warning(self, "Caméra", "Aucune caméra disponible.")
             return
         w, h = self.res_combo.currentData()
-        log.info("Démarrage caméra index=%s (%s) %dx%d", idx, self.cam_combo.currentText(), w, h)
+        log.info("Démarrage caméra id=%s (%s) %dx%d", idx, self.cam_combo.currentText(), w, h)
         try:
             self.camera = Camera(index=idx, width=w, height=h)
             self.camera.start()
